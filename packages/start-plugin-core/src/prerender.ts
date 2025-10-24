@@ -1,8 +1,8 @@
 import { existsSync, promises as fsp, rmSync } from 'node:fs'
-import { pathToFileURL } from 'node:url'
 import os from 'node:os'
 import path from 'pathe'
 import { joinURL, withBase, withoutBase } from 'ufo'
+import { preview } from 'vite'
 import { VITE_ENVIRONMENT_NAMES } from './constants'
 import { createLogger } from './utils'
 import { Queue } from './queue'
@@ -65,13 +65,21 @@ export async function prerender({
     fullEntryFilePath = path.join(bundleOutputDir, entryFile)
   }
 
-  const { default: serverEntrypoint } = await import(
-    pathToFileURL(fullEntryFilePath).toString()
-  )
+  // Start Vite preview server instead of importing module
+  const previewServer = await preview({
+    configFile: serverEnv.config.configFile,
+    preview: {
+      port: 0, // Use random available port
+    },
+  })
+  const previewUrl =
+    previewServer.resolvedUrls?.local[0] ??
+    `http://localhost:${previewServer.config.preview.port}`
+  logger.info(`Preview server started at ${previewUrl}`)
 
   function localFetch(path: string, options?: RequestInit): Promise<Response> {
-    const url = new URL(`http://localhost${path}`)
-    return serverEntrypoint.fetch(new Request(url, options))
+    const url = new URL(path, previewUrl)
+    return fetch(url, options)
   }
 
   try {
@@ -84,6 +92,8 @@ export async function prerender({
     })
   } catch (error) {
     logger.error(error)
+  } finally {
+    await previewServer.close()
   }
 
   function extractLinks(html: string): Array<string> {
