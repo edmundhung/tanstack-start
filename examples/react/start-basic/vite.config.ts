@@ -13,6 +13,10 @@ export default defineConfig({
     }),
     tanstackStart({
       srcDirectory: 'src',
+      prerender: {
+        enabled: true,
+        failOnError: false,
+      },
     }),
     viteReact(),
   ],
